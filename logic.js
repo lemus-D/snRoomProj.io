@@ -5,59 +5,61 @@ AFRAME.registerComponent('ghost-logic', {
     this.content = document.querySelector('#my-content');
     this.statusDiv = document.querySelector('#debug-status');
     
+    // 2. STATE TRACKING
     this.isTracking = false;
+    this.lastKnownPos = null;
+    this.lastKnownRot = null;
 
-    // 2. EVENT: FOUND
+    // 3. EVENT: FOUND
     this.target.addEventListener("targetFound", () => {
+      console.log("✅ Target Found!");
       this.isTracking = true;
       this.content.object3D.visible = true;
-      
+
       // Debug UI Update
       if(this.statusDiv) {
-          this.statusDiv.innerHTML = "STATUS: FOUND! (Syncing)";
-          this.statusDiv.style.background = "green";
+        this.statusDiv.innerHTML = "STATUS: TRACKING ✓";
+        this.statusDiv.style.background = "green";
       }
-
-      // INSTANT SNAP
-      const p = this.target.object3D.position;
-      const r = this.target.object3D.rotation;
-      this.content.object3D.position.set(p.x, p.y, p.z);
-      this.content.object3D.rotation.set(r.x, r.y, r.z);
     });
 
-    // 3. EVENT: LOST
+    // 4. EVENT: LOST
     this.target.addEventListener("targetLost", () => {
+      console.log("⚠️ Target Lost - Entering Ghost Mode");
       this.isTracking = false;
-      
+
+      // Capture the last known position/rotation when we lose tracking
+      if (this.target.object3D.position && this.target.object3D.rotation) {
+        this.lastKnownPos = this.target.object3D.position.clone();
+        this.lastKnownRot = this.target.object3D.rotation.clone();
+      }
+
       // Debug UI Update
       if(this.statusDiv) {
-          this.statusDiv.innerHTML = "STATUS: GHOST MODE (Persisting)";
-          this.statusDiv.style.background = "orange";
+        this.statusDiv.innerHTML = "STATUS: GHOST MODE 👻";
+        this.statusDiv.style.background = "orange";
       }
     });
   },
 
   tick: function() {
-    // 4. THE LOOP
-    const prevPos = [];
-    const prevRot = [];
-
+    // 5. THE TRACKING LOOP
     if (this.isTracking) {
+      // ACTIVE TRACKING - Follow the target smoothly
       const targetPos = this.target.object3D.position;
       const targetRot = this.target.object3D.rotation;
 
-      prevPos.push(targetPos);
-      prevRot.push(targetRot);
+      // Smooth position lerp (interpolation)
+      this.content.object3D.position.lerp(targetPos, 0.3);
 
-      this.content.object3D.position.lerp(targetPos, 0.1); 
-      this.content.object3D.rotation.x = targetRot.x;
-      this.content.object3D.rotation.y = targetRot.y;
-      this.content.object3D.rotation.z = targetRot.z;
-    } else if (prevPos[0] != null) {
-      this.content.object3D.position.lerp(prevPos[prevPos.length -1], 0.1); 
-      this.content.object3D.rotation.x = prevRot[prevRot.length -1 ].x;
-      this.content.object3D.rotation.y = prevRot[prevRot.length -1 ].y;
-      this.content.object3D.rotation.z = prevRot[prevRot.length -1 ].z;
+      // Direct rotation copy (you can lerp this too if you want smoother rotation)
+      this.content.object3D.rotation.copy(targetRot);
+
+    } else if (this.lastKnownPos && this.lastKnownRot) {
+      // GHOST MODE - Hold the last known position
+      // Content stays frozen in space where it was last seen
+      this.content.object3D.position.copy(this.lastKnownPos);
+      this.content.object3D.rotation.copy(this.lastKnownRot);
     }
   }
 });
